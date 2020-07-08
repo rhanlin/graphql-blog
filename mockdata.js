@@ -1,4 +1,4 @@
-const ME_ID = 1
+// const ME_ID = 1
 
 const USERS = [
   {
@@ -47,7 +47,6 @@ const POSTS = [
 ]
 
 module.exports = {
-  ME_ID,
   USERS,
   POSTS
 }

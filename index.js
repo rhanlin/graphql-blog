@@ -1,82 +1,32 @@
+require('dotenv').config()
+
+const SALT_ROUNDS = Number(process.env.SALT_ROUNDS)
+const SECRET = process.env.SECRET
+// console.log(SALT_ROUNDS, SECRET)
+
 const { ApolloServer, gql, ForbiddenError } = require('apollo-server')
-const { ME_ID, USERS, POSTS } = require('./mockdata')
+const { USERS, POSTS } = require('./mockdata')
 const bcrypt = require('bcrypt')
 const jwt = require('jsonwebtoken')
 
-// 定義 bcrypt 加密所需 saltRounds 次數
-const SALT_ROUNDS = 2
-// 定義 jwt 所需 secret (可隨便打)
-const SECRET = 'just_a_random_secret'
-
-
-// helper functions
-const filterPostsByUserId = userId => POSTS.filter(post => userId === post.authorId)
-
-const filterUsersByUserIds = userIds => USERS.filter(user => userIds.includes(user.id))
-  
-const findUserByUserId = userId => USERS.find(user => user.id === Number(userId))
-/*
- * 因為在 GraphQL 中我們使用 ID Scalar Type 的話他會預設轉為 String
- * 與我們在資料中存的 id 是 Integer 不相同，因此需要特別做 Number() 轉換。
- */
-const findUserByName = name => USERS.find(user => user.name === name)
-
-const findPostByPostId = postId => POSTS.find(post => post.id === Number(postId))
-
-const updateUserInfo = (userId, data) => Object.assign(findUserByUserId(userId), data)
-
-const addPost = ({ authorId, title, body }) =>
-  (POSTS[POSTS.length] = {
-    id: POSTS[POSTS.length - 1].id + 1,
-    authorId,
-    title,
-    body,
-    likeGiverIds: [],
-    createdAt: new Date().toISOString()
-  })
-
-const updatePost = (postId, data) => Object.assign(findPostByPostId(postId), data)
-
-// Authentication (認證)
-const hash = text => bcrypt.hash(text, SALT_ROUNDS)
-
-const addUser = ({ name, email, password }) => (
-  USERS[USERS.length] = {
-    id: USERS[USERS.length - 1].id + 1,
-    name,
-    email,
-    password
-  }
-)
-// login
-const createToken = ({ id, email, name }) => jwt.sign({ id, email, name }, SECRET, {
-  expiresIn: '1d'
-})
-
-const isAuthenticated = resolverFunc => {
-  return (parent, args, context) => {
-    if (!context.me) throw new ForbiddenError('Not logged in.')
-    return resolverFunc.apply(null, [parent, args, context])
-  }
-}
-// const isAuthenticated = resolverFunc => (parent, args, context) => {
-//   if (!context.me) throw new ForbiddenError('Not logged in.')
-//   return resolverFunc.apply(null, [parent, args, context])
-// }
-
-
-//delete post
-const deletePost = (postId) =>
-  posts.splice(posts.findIndex(post => post.id === postId), 1)[0]
-
-
-const isPostAuthor = resolverFunc => (parent, args, context) => {
-  const { postId } = args
-  const { me } = context
-  const isAuthor = findPostByPostId(postId).authorId === me.id
-  if (!isAuthor) throw new ForbiddenError('Only Author Can Delete this Post')
-  return resolverFunc.applyFunc(parent, args, context)
-}
+const {
+  getAllUsers,
+  getAllPosts,
+  filterPostsByUserId,
+  filterUsersByUserIds,
+  findUserByUserId,
+  findUserByName,
+  findPostByPostId,
+  updateUserInfo,
+  addPost,
+  updatePost,
+  hash,
+  addUser,
+  createToken,
+  isAuthenticated,
+  deletePost,
+  isPostAuthor,
+} = require('./models');
 
 // Schema
 const typeDefs = gql `
@@ -231,19 +181,24 @@ const resolvers = {
     deletePost: isAuthenticated(isPostAuthor((root, { postId }, { me }) => {
       return deletePost(postId)
     })),
-    signUp: async (root, { name, email, password }, context) => {
+    signUp: async (root, { name, email, password }, { saltRounds }) => {
       // 1. 檢查不能有重複註冊 email
       const isUserEmailDuplicate = USERS.some(user => user.email === email)
       if (isUserEmailDuplicate) throw new Error('User Email Duplicate')
 
       // 2. 將 passwrod 加密再存進去。非常重要 !!
-      const hashedPassword = await hash(password, SALT_ROUNDS)
+      const hashedPassword = await hash(password, saltRounds)
       // console.log(hashedPassword)
       
       // 3. 建立新 user
-      return addUser({ name, email, password: hashedPassword })
+      return addUser({ 
+        name, 
+        email, 
+        password: hashedPassword, 
+        friendIds: [] 
+      })
     },
-    login: async (root, { email, password }, context) => {
+    login: async (root, { email, password }, { secret }) => {
       // 1. 透過 email 找到相對應的 user
       const user = USERS.find(user => user.email === email)
       if (!user) throw new Error('Email Account Not Exists')
@@ -253,7 +208,7 @@ const resolvers = {
       if (!passwordIsValid) throw new Error('Wrong Password')
 
       // 3. 成功則回傳 token
-      return { token: await createToken(user) }
+      return { token: await createToken(user, secret) }
     }
   }
 }
@@ -264,7 +219,9 @@ const server = new ApolloServer({
   typeDefs,
   // Resolver 部分
   resolvers,
+  // context 部分
   context: async ({ req }) => {
+    const context = { secret: SECRET, saltRounds: SALT_ROUNDS }
     // 1. 取出
     const token = req.headers['x-token']
     if (token) {
@@ -272,13 +229,13 @@ const server = new ApolloServer({
         // 2. 檢查 token + 取得解析出的資料
         const me = await jwt.verify(token, SECRET)
         // 3. 放進 context
-        return { me }
+        return { ...context ,me }
       } catch (e) {
         throw new Error('Your session expired. Sign in again.')
       }
     }
     // 如果沒有 token 就回傳空的 context 出去
-    return {}
+    return context
   }
 })
 
