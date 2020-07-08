@@ -46,7 +46,7 @@ const POSTS = [
   }
 ]
 
-export  {
+module.exports = {
   ME_ID,
   USERS,
   POSTS
