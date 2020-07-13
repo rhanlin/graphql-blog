@@ -7,9 +7,7 @@ const { ApolloServer } = require('apollo-server')
 const { typeDefs, resolvers } = require('./schema')
 const { USER_MODEL, POST_MODEL } = require('./models')
 
-/*
- * 3. 初始化 Web Server ，需傳入 typeDefs (Schema) 與 resolvers (Resolver)
- */ 
+// 初始化 Web Server ，需傳入 typeDefs (Schema) 與 resolvers (Resolver)
 const server = new ApolloServer({
   // Schema 部分
   typeDefs,
@@ -40,9 +38,7 @@ const server = new ApolloServer({
   }
 })
 
-/*
- * 4. 啟動 Server
- */
+// 啟動 Server
 server.listen().then(({ url }) => {
   console.log(`? Server ready at ${url}`)
 })

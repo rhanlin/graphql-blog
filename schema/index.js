@@ -1,9 +1,8 @@
 const { gql } = require('apollo-server')
 const USER_SCHEMA = require('./user')
 const POST_SCHEMA = require('./post')
-/*
- * 1. Schema
- */ 
+
+// 1. Schema 
 const typeDefs = gql `
 type Query {
   "測試用 Hello World"
@@ -13,9 +12,8 @@ type Mutation {
   test: Boolean
 }
 `
-/*
- * 2. Resolver
- */ 
+
+// 2. Resolver
 const resolvers = {
   Query: {
     hello: () => "world",

@@ -49,7 +49,7 @@ extend type Mutation {
 }
 `
 
-//helper functions
+// helper functions
 // Authentication (認證)
 const hash = (text, saltRounds) => bcrypt.hash(text, saltRounds)
 
