@@ -7,6 +7,7 @@ const { ApolloServer } = require('apollo-server')
 const { typeDefs, resolvers } = require('./schema')
 const { USER_MODEL, POST_MODEL } = require('./models')
 
+const db = require('./database')
 // 初始化 Web Server ，需傳入 typeDefs (Schema) 與 resolvers (Resolver)
 const server = new ApolloServer({
   // Schema 部分
@@ -37,6 +38,8 @@ const server = new ApolloServer({
     return context
   }
 })
+
+// server.use()
 
 // 啟動 Server
 server.listen().then(({ url }) => {
