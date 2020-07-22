@@ -1,4 +1,5 @@
 require('dotenv').config()
+const config = require('./config')
 const SALT_ROUNDS = Number(process.env.SALT_ROUNDS)
 const SECRET = process.env.SECRET
 
@@ -7,14 +8,13 @@ const { ApolloServer } = require('apollo-server')
 const { typeDefs, resolvers } = require('./schema')
 const { USER_MODEL, POST_MODEL } = require('./models')
 
-const db = require('./database')
+// const db = require('./database')
+// console.log(db)
+
 // 初始化 Web Server ，需傳入 typeDefs (Schema) 與 resolvers (Resolver)
 const server = new ApolloServer({
-  // Schema 部分
   typeDefs,
-  // Resolver 部分
   resolvers,
-  // context 部分
   context: async ({ req }) => {
     const context = { 
       secret: SECRET,
@@ -39,9 +39,13 @@ const server = new ApolloServer({
   }
 })
 
-// server.use()
+// server.use('/graphql', graphqlHTTP({
+//   schema: schema,
+//   rootValue: root,
+//   graphiql: true,
+// }));
 
 // 啟動 Server
-server.listen().then(({ url }) => {
-  console.log(`? Server ready at ${url}`)
+server.listen(config.PORT).then(({ url }) => {
+  console.log(`? 🚀Server ready at ${url}`)
 })

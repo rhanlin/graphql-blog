@@ -34,24 +34,30 @@ input AddPostInput {
 extend type Mutation {
   addPost(input: AddPostInput!): Post
   likePost(postId: ID!): Post
-  deletePost(postId: ID!): Post
+  deletePost(postId: ID!): [Post]
 }
 `
 
-const isAuthenticated = resolverFunc => {
-  return (parent, args, context) => {
+const isAuthenticated = resolverFunc => 
+  (parent, args, context) => {
     if (!context.me) throw new ForbiddenError('Not logged in.')
     return resolverFunc.apply(null, [parent, args, context])
   }
-}
 
-const isPostAuthor = resolverFunc => (parent, args, context) => {
-  const { postId } = args
-  const { me, POST_MODEL } = context
-  const isAuthor = POST_MODEL.findPostByPostId(postId).authorId === me.id
-  if (!isAuthor) throw new ForbiddenError('Only Author Can Delete this Post')
-  return resolverFunc.applyFunc(parent, args, context)
-}
+
+const isPostAuthor = resolverFunc => 
+  async (parent, args, context) => {
+    const { postId } = args
+    const { me, POST_MODEL } = context
+    // console.log(parent, args, context)
+    try {
+      const { authorId } = await POST_MODEL.findPostByPostId(postId)
+      if (authorId !== me.id) throw new ForbiddenError('Only Author Can Delete this Post')
+      return resolverFunc.apply(null, [parent, args, context])
+    } catch (error) {
+      return error
+    }   
+  }
 
 const resolvers = {
   Query: {
@@ -63,31 +69,66 @@ const resolvers = {
     likeGivers: (parent, args, { USER_MODEL }) => USER_MODEL.filterUsersByUserIds(parent.likeGiverIds)
   },
   Mutation: {
-    addPost: isAuthenticated((parent, { input }, { me, POST_MODEL }) => {
+    addPost: isAuthenticated( async (parent, { input }, { me, POST_MODEL }) => {
 
       const { title, body } = input
 
-      return POST_MODEL.addPost({ authorId: me.id, title, body })
+      const newPostResponse = await POST_MODEL.addPost({ authorId: me.id, title, body })
+      // console.log(newPostResponse)
+      const newPost = await POST_MODEL.findPostByPostId(newPostResponse.lastId)
+      // console.log(newPost)
+      
+      return newPost
+      
     }),
-    likePost: isAuthenticated((parent, { postId }, { me, POST_MODEL }) => {
+    likePost: isAuthenticated(async (parent, { postId }, { me, POST_MODEL }) => {
 
-      const post = POST_MODEL.findPostByPostId(postId)
+      let post = await POST_MODEL.findPostByPostId(postId)
+
+      post.likeGiverIds = [post.likeGiverIds]
+      // console.log('schema: '+ post.likeGiverIds)
 
       if (!post) throw new Error(`Post ${postId} Not Exists`)
-
+      //TODO: 
+      let updatePostInfo = {}
       if (!post.likeGiverIds.includes(postId)) {
-        return POST_MODEL.updatePost(postId, {
+        console.log('1: '+ post.likeGiverIds)
+
+        updatePostInfo = await POST_MODEL.updatePost(postId, {
           likeGiverIds: post.likeGiverIds.concat(me.id)
         })
+      } else {
+        console.log('2: '+ post.likeGiverIds)
+        
+        updatePostInfo = await POST_MODEL.updatePost(postId, {
+          likeGiverIds: post.likeGiverIds.filter(id => id === me.id)
+        })
       }
+      
 
-      return POST_MODEL.updatePost(postId, {
-        likeGiverIds: post.likeGiverIds.filter(id => id === me.id)
-      })
+      // console.log(':>>>>> '+ updatePostInfo)
+
+      const updatedPost = await POST_MODEL.findPostByPostId(postId)
+      // console.log('::::>>>>>>> '+ updatedPost)
+      return updatedPost
     }),
-    deletePost: isAuthenticated(isPostAuthor((root, { postId }, { me, POST_MODEL }) => {
-      return POST_MODEL.deletePost(postId)
-    })),
+
+    deletePost: isAuthenticated(
+      isPostAuthor( 
+        async (root, { postId }, { me, POST_MODEL }) => {
+          try {
+            // return await POST_MODEL.deletePost(postId)
+            const {status} = await POST_MODEL.deletePost(postId)
+            if(status !== '200') throw new Error(`status: ${status}, delete post fail`)
+            const data = await POST_MODEL.filterPostsByUserId(me.id)
+            console.log(data)
+            return data
+          } catch (error) {
+            return error
+          }
+        }      
+      )
+    ),
   }
 }
 
